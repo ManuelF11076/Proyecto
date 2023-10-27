@@ -1,0 +1,127 @@
+import tkinter as tk
+from tkinter import PhotoImage  # Importa PhotoImage para manejar imágenes
+from ortools.linear_solver import pywraplp
+import os
+
+class TransportProblemSolverGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.configure(bg="#F0F8FF")  # Cambia el color de fondo de la ventana
+        self.root.title("Modelo de Optimización")
+        self.solution_count = 1  # Variable para contar las soluciones 
+
+        # Agregar una imagen
+        img = PhotoImage(file="OneDrive\Escritorio\Proyecto\\3.png") 
+        img_label = tk.Label(root, image=img, bg="#F0F8FF")
+        img_label.image = img  
+        img_label.grid(row=0, column=4, rowspan=2, padx=10, pady=10, sticky='e')  
+
+        # Agregar un título en la parte superior
+        title_label = tk.Label(root, text="     Panadería ''El Divino Maestro''", font=("Script MT Bold", 22, "bold"), bg="#F0F8FF", fg="#B8860B")
+        title_label.grid(row=0, column=0, columnspan=6, padx=10, pady=10, sticky='w')
+
+
+        # titulos para los datos de entrada, oferta y demanda
+        self.labels = ["Producción Panadería 1:", "Producción Panadería 2:", "Demanda Sucursal 1:", "Demanda Sucursal 2:", "Demanda Sucursal 3:"]
+        self.entries = []
+        
+        for i, label in enumerate(self.labels):
+            tk.Label(root, text=label, font=("Berlin Sans FB", 12), bg="#F0F8FF").grid(row=i + 1, column=0, padx=10, pady=10, sticky='w')
+            entry = tk.Entry(root, font=("Berlin Sans FB", 12))
+            entry.grid(row=i + 1, column=1, padx=10, pady=10, columnspan=2, sticky='w')
+            self.entries.append(entry)
+
+        # Titulos para los costos de envio
+        self.cost_labels = ["Costo Panadería 1 a Sucursal 1:", "Costo Panadería 1 a Sucursal 2:", "Costo Panadería 1 a Sucursal 3:",
+                            "Costo Panadería 2 a Sucursal 1:", "Costo Panadería 2 a Sucursal 2:", "Costo Panadería 2 a Sucursal 3:"]
+        self.cost_entries = []
+        for i, cost_label in enumerate(self.cost_labels):
+            tk.Label(root, text=cost_label, font=("Berlin Sans FB", 12), bg="#F0F8FF").grid(row=i + len(self.labels) + 1, column=0, padx=10, pady=10, sticky='w')
+            cost_entry = tk.Entry(root, font=("Berlin Sans FB", 12))
+            cost_entry.grid(row=i + len(self.labels) + 1, column=1, padx=10, pady=10, columnspan=2, sticky='w')
+            self.cost_entries.append(cost_entry)
+
+        # Etiqueta para mostrar los resultados en la interfaz
+        self.result_label = tk.Label(root, text="", font=("Berlin Sans FB", 12), bg="#F0F8FF")
+        self.result_label.grid(row=len(self.labels) + len(self.cost_labels) + 4, column=0, columnspan=6, padx=10, pady=10, sticky='w')
+
+        # Botón para resolver el problema y mostrar la solución en la interfaz
+        solve_button = tk.Button(root, text="Resolver", command=self.solve_and_display, font=("Berlin Sans FB", 14), bg="green", fg="white")
+        solve_button.grid(row=len(self.labels) + len(self.cost_labels) + 2, column=0, padx=10, pady=10, sticky='w')
+        # Botón para limpiar las entradas
+        clear_button = tk.Button(root, text="Limpiar", command=self.clear_entries, font=("Berlin Sans FB", 14), bg="orange")
+        clear_button.grid(row=len(self.labels) + len(self.cost_labels) + 2, column=1, padx=10, pady=10, sticky='w')
+        # Botón para guardar resultados en un archivo
+        save_button = tk.Button(root, text="Guardar", command=self.save_to_file, font=("Berlin Sans FB", 14), bg="blue", fg="white")
+        save_button.grid(row=len(self.labels) + len(self.cost_labels) + 2, column=2, padx=10, pady=10, sticky='w')
+
+    
+    def clear_entries(self):
+        for entry in self.entries + self.cost_entries:
+            entry.delete(0, tk.END)
+
+        # Limpiar las etiquetas de resultados
+        for i in range(2):
+            for j in range(3):
+                self.result_labels[i][j].config(text="")
+
+    def solve_and_display(self):
+        supplies = [int(entry.get()) for entry in self.entries[:2]]
+        demands = [int(entry.get()) for entry in self.entries[2:]]
+        costs = [[int(cost_entry.get()) for cost_entry in self.cost_entries[i * 3: (i + 1) * 3]] for i in range(2)]
+
+        solver = pywraplp.Solver.CreateSolver('GLOP')
+
+        num_sources = len(supplies)
+        num_destinations = len(demands)
+
+        x = {}
+        for i in range(num_sources):
+            for j in range(num_destinations):
+                x[i, j] = solver.IntVar(0, solver.infinity(), f'x[{i},{j}]')
+
+        for i in range(num_sources):
+            solver.Add(solver.Sum(x[i, j] for j in range(num_destinations)) <= supplies[i])
+
+        for j in range(num_destinations):
+            solver.Add(solver.Sum(x[i, j] for i in range(num_sources)) == demands[j])
+
+        solver.Minimize(solver.Sum(costs[i][j] * x[i, j] for i in range(num_sources) for j in range(num_destinations)))
+
+        status = solver.Solve()
+        
+        if status == pywraplp.Solver.OPTIMAL:
+            # Mostrar la solución en la interfaz
+            result = ""
+            for i in range(num_sources):
+                for j in range(num_destinations):
+                    if x[i, j].solution_value() > 0:
+                        result += f"Enviar {x[i, j].solution_value()} unidades desde Panaderia {i+1} a Sucursal {j+1}\n"
+                        self.result_label.config(text=result)
+        else:
+            self.result_label.config(text="No se encontró una solución óptima.")
+
+
+    def save_to_file(self):
+        # Obtener la ruta completa a la carpeta donde se guardarán los archivos
+        output_directory = os.path.expanduser("OneDrive\Escritorio\Proyecto")  # Cambia esta ruta según tu necesidad
+        
+        # Verificar si la carpeta de salida existe, si no, crearla
+        if not os.path.exists(output_directory):
+            os.makedirs(output_directory)
+
+        # Crear la ruta completa al archivo de solución
+        file_name = os.path.join(output_directory, f"solucion{self.solution_count}.txt")
+
+        # Guardar los resultados en un archivo de texto
+        with open(file_name, "w") as file:
+            file.write(self.result_label.cget("text"))
+
+        self.result_label.config(text=f"Resultados guardados en '{file_name}'")
+        self.solution_count += 1
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TransportProblemSolverGUI(root)
+    root.mainloop()
