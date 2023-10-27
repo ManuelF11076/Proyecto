@@ -1,0 +1,35 @@
+ def solve_and_display(self):
+        supplies = [int(entry.get()) for entry in self.entries[:2]]
+        demands = [int(entry.get()) for entry in self.entries[2:]]
+        costs = [[int(cost_entry.get()) for cost_entry in self.cost_entries[i * 3: (i + 1) * 3]] for i in range(2)]
+
+        solver = pywraplp.Solver.CreateSolver('GLOP')
+
+        num_sources = len(supplies)
+        num_destinations = len(demands)
+
+        x = {}
+        for i in range(num_sources):
+            for j in range(num_destinations):
+                x[i, j] = solver.IntVar(0, solver.infinity(), f'x[{i},{j}]')
+
+        for i in range(num_sources):
+            solver.Add(solver.Sum(x[i, j] for j in range(num_destinations)) <= supplies[i])
+
+        for j in range(num_destinations):
+            solver.Add(solver.Sum(x[i, j] for i in range(num_sources)) == demands[j])
+
+        solver.Minimize(solver.Sum(costs[i][j] * x[i, j] for i in range(num_sources) for j in range(num_destinations)))
+
+        status = solver.Solve()
+        
+        if status == pywraplp.Solver.OPTIMAL:
+            # Mostrar la solución en la interfaz
+            result = ""
+            for i in range(num_sources):
+                for j in range(num_destinations):
+                    if x[i, j].solution_value() > 0:
+                        result += f"Enviar {x[i, j].solution_value()} unidades desde Panaderia {i+1} a Sucursal {j+1}\n"
+                        self.result_label.config(text=result)
+        else:
+            self.result_label.config(text="No se encontró una solución óptima.")
