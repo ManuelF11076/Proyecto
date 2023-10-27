@@ -1,4 +1,3 @@
-        #******************************************************************************************Botones
 
         # Etiqueta para mostrar los resultados en la interfaz
         self.result_label = tk.Label(root, text="", font=("Berlin Sans FB", 12), bg="#F0F8FF")
